@@ -19,7 +19,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ladon_config import (  # noqa: E402
     DEFAULT_FPS,
-    DEFAULT_WAVE_AMPLITUDE_DEG,
     DEFAULT_WAVE_CYCLES,
     MAX_WAVE_AMPLITUDE_DEG,
     action_from_pose,
@@ -31,7 +30,7 @@ from ladon_config import (  # noqa: E402
     sleep_step,
     slew_to_pose,
 )
-from scripts.lift_and_wave import wave_from_pose  # noqa: E402
+from scripts.lift_and_wave import open_palm_greeting_from_pose  # noqa: E402
 
 
 PAN_JOINT = "shoulder_pan"
@@ -86,11 +85,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sensor-height", type=int, default=720, help="Jetson CSI capture height before scaling.")
     parser.add_argument("--sensor-fps", type=int, default=60, help="Jetson CSI capture framerate before throttling.")
     parser.add_argument("--wave-joint", choices=["wrist_flex", "shoulder_pan"], default="wrist_flex")
-    parser.add_argument("--wave-amplitude", type=float, default=DEFAULT_WAVE_AMPLITUDE_DEG)
+    parser.add_argument("--wave-amplitude", type=float, default=6.0)
     parser.add_argument("--wave-cycles", type=int, default=DEFAULT_WAVE_CYCLES)
     parser.add_argument("--wave-cycle-seconds", type=float, default=1.6)
     parser.add_argument("--wave-cooldown-seconds", type=float, default=3.0)
     parser.add_argument("--open-palm-hold-seconds", type=float, default=0.6)
+    parser.add_argument(
+        "--greeting-lift-deg",
+        type=float,
+        default=25.0,
+        help="Relative shoulder_lift change used to present the arm before the open-palm wave.",
+    )
+    parser.add_argument(
+        "--greeting-wrist-offset-deg",
+        type=float,
+        default=-35.0,
+        help="Relative wrist_flex change used to present the wrist before the open-palm wave.",
+    )
+    parser.add_argument(
+        "--greeting-settle-seconds",
+        type=float,
+        default=0.8,
+        help="Seconds used to ease into and settle out of the open-palm greeting pose.",
+    )
     parser.add_argument(
         "--no-hand-behavior",
         choices=["hold", "return"],
@@ -364,9 +381,12 @@ def make_wave_args(args: argparse.Namespace) -> SimpleNamespace:
     return SimpleNamespace(
         wave_joint=args.wave_joint,
         amplitude=clamp_abs(args.wave_amplitude, MAX_WAVE_AMPLITUDE_DEG, "wave-amplitude"),
-        shoulder_assist=0.0,
+        shoulder_assist=0.0 if args.wave_joint == PAN_JOINT else 1.0,
         cycles=max(1, args.wave_cycles),
         cycle_seconds=max(0.5, args.wave_cycle_seconds),
+        greeting_lift_deg=args.greeting_lift_deg,
+        greeting_wrist_offset_deg=args.greeting_wrist_offset_deg,
+        greeting_settle_seconds=args.greeting_settle_seconds,
         fps=args.fps,
     )
 
@@ -473,12 +493,12 @@ def main() -> None:
                 held_open = now - open_since >= args.open_palm_hold_seconds
                 if held_open and now >= next_wave_time:
                     if args.dry_run:
-                        print(f"Wave trigger: {args.wave_joint} from open palm.")
+                        print(f"Open-palm greeting trigger: {args.wave_joint} wave.")
                     else:
-                        wave_pose = dict(start_pose)
-                        wave_pose[PAN_JOINT] = target_pan
-                        wave_pose[ELBOW_JOINT] = target_elbow
-                        wave_from_pose(robot, wave_pose, wave_args)
+                        greeting_pose = dict(start_pose)
+                        greeting_pose[PAN_JOINT] = target_pan
+                        greeting_pose[ELBOW_JOINT] = target_elbow
+                        open_palm_greeting_from_pose(robot, greeting_pose, wave_args)
                     next_wave_time = time.perf_counter() + args.wave_cooldown_seconds
                     open_since = None
             else:
