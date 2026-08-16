@@ -1,73 +1,110 @@
 # SO-101 Ladon
 
-## Real-Time Hand Gesture Teleoperation on Jetson Orin Nano
+Real-time hand-gesture teleoperation for a LeRobot SO-101 follower arm running
+on a Jetson Orin Nano.
 
-`Ladon Hand Follow` is a computer vision demo for the SO-101 follower arm. A
-camera connected to the Jetson Orin Nano tracks one hand with MediaPipe Hands,
-maps left/right hand position to safe `shoulder_pan` motion, maps up/down hand
-position to safe `elbow_flex` motion, and triggers a gentle wave when an open
-palm is held in view.
+This repository contains small, safety-focused control scripts for the SO-101
+arm named `ladon`. The main demo uses a Raspberry Pi Camera v2 on the Jetson CSI
+camera port, MediaPipe hand landmarks, OpenCV frame processing, and LeRobot
+motor commands to control the arm from live hand motion.
 
-Portfolio framing:
+## What It Does
 
-> Built a real-time hand-gesture teleoperation system on Jetson Orin Nano using
-> OpenCV, MediaPipe Hands, and LeRobot, with smoothed vision-to-joint control,
-> recorded joint safety limits, and interrupt-safe robot return behavior.
+`scripts/hand_follow.py` tracks one hand and maps the hand position into robot
+motion:
 
-Architecture:
+- Hand left/right controls `shoulder_pan`.
+- Hand up moves `elbow_flex` in the negative direction.
+- Hand down moves `elbow_flex` in the positive direction.
+- Holding an open palm triggers a gentle wave.
+- The script smooths targets, limits per-frame motion, clamps to recorded safe
+  joint limits, and returns controlled joints to the measured start pose on
+  shutdown.
 
 ```text
-Jetson camera -> OpenCV frames -> MediaPipe hand landmarks -> gesture/state filter
-    -> smoothed safe joint targets -> LeRobot SO-101 follower arm
+Jetson CSI camera
+    -> OpenCV frames
+    -> MediaPipe hand landmarks
+    -> gesture and target filtering
+    -> safe LeRobot SO-101 follower commands
 ```
 
-Small, editable scripts for safely testing the SO-101 follower arm named `ladon`.
+## Project Highlights
 
-This repo assumes:
+- Jetson CSI camera support through `nvarguscamerasrc`, useful when Conda
+  OpenCV cannot open the Pi Camera v2 directly.
+- Browser-based MJPEG preview for SSH development from a Mac or laptop.
+- Dry-run mode for validating camera tracking before moving hardware.
+- Recorded safe joint limits in `config/safe_joint_limits.json`.
+- Shared robot configuration and safety helpers in `ladon_config.py`.
+- Utility scripts for pose inspection, joint mapping, safe-limit recording, and
+  scripted lift-and-wave tests.
+
+## Repository Layout
+
+```text
+.
+|-- ladon_config.py                    # Shared robot config, remap, and safety helpers
+|-- config/safe_joint_limits.json      # Recorded safe motion envelope for Ladon
+|-- docs/joint_mapping_ladon.md        # Current physical-to-LeRobot joint mapping notes
+`-- scripts/
+    |-- hand_follow.py                 # Vision-guided teleoperation demo
+    |-- check_hand_follow_deps.py      # Runtime dependency check
+    |-- download_hand_landmarker.py    # MediaPipe model downloader
+    |-- read_pose.py                   # Print current robot joint positions
+    |-- live_joint_deltas.py           # Inspect joint labels while moving by hand
+    |-- record_safe_limits.py          # Record safe limits for all joints
+    |-- record_one_safe_limit.py       # Re-record one joint's safe limits
+    `-- lift_and_wave.py               # Scripted lift, wave, and return motion
+```
+
+## Hardware And Environment
+
+This repo currently assumes:
 
 - Jetson Orin Nano
+- Raspberry Pi Camera v2 connected to Jetson `camera0`
 - LeRobot checkout at `~/lerobot`
-- Conda env named `lerobot`
-- Follower arm only, no leader arm
+- Conda environment named `lerobot`
+- SO-101 follower arm only, no leader arm
 - Robot port `/dev/ttyACM0`
 - Robot id `ladon`
-- Existing calibration in the LeRobot Hugging Face cache
+- Existing LeRobot calibration in the local Hugging Face cache
 
-## Safety Checklist
+If the port, robot id, or joint channel mapping changes, update
+`ladon_config.py`.
 
-Before running motion scripts:
+## Safety
+
+Before running any script that moves the robot:
 
 1. Keep one hand near robot power.
 2. Start with the arm in a rested, non-stressed pose.
-3. Make sure no cables, fingers, tools, or table edges are in the motion path.
-4. Run `read_pose.py` before motion.
-5. Use `live_joint_deltas.py` if a joint label or direction seems unclear.
+3. Keep cables, fingers, tools, and table edges out of the motion path.
+4. Run `python scripts/read_pose.py` before motion.
+5. Use `python scripts/live_joint_deltas.py` if a joint label or direction
+   seems unclear.
 
-These scripts always read the current pose first and command small relative movements from that measured pose.
+Motion scripts read the current pose first, command relative movements from that
+measured pose, clamp targets to recorded safe limits, and limit per-step target
+changes.
 
 ## Setup
 
-From this repo:
+Activate the environment and enter the repo:
 
 ```bash
 conda activate lerobot
 cd ~/lerobot/SO-101_Ladon
 ```
 
-Quick import check:
+Check that LeRobot imports:
 
 ```bash
 python -c "from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig; print('ok')"
 ```
 
-Hand-follow dependency check:
-
-```bash
-python scripts/check_hand_follow_deps.py
-```
-
-The `lerobot` env currently provides OpenCV, NumPy, Torch, and LeRobot. Install
-MediaPipe inside that env before running the hand-follow demo:
+Install MediaPipe if needed:
 
 ```bash
 python -m pip install mediapipe
@@ -79,125 +116,152 @@ Download the MediaPipe hand landmarker model:
 python scripts/download_hand_landmarker.py
 ```
 
-If the default MediaPipe wheel is not available for your Jetson Python version
-or architecture, use a Jetson-compatible MediaPipe wheel. As a fallback project
-path, keep the same robot-control script shape and replace MediaPipe landmark
-detection with OpenCV color-marker tracking.
-
-## Commands
-
-Read all joints:
+Verify the hand-follow runtime dependencies:
 
 ```bash
-python scripts/read_pose.py
+python scripts/check_hand_follow_deps.py
 ```
 
-Find Jetson cameras:
+If the default MediaPipe wheel is unavailable for the Jetson Python version or
+architecture, use a Jetson-compatible MediaPipe wheel.
+
+## Camera Check
+
+The Pi Camera v2 should appear as Jetson camera `sensor-id=0`:
 
 ```bash
-lerobot-find-cameras opencv
+gst-launch-1.0 nvarguscamerasrc sensor-id=0 num-buffers=100 ! \
+'video/x-raw(memory:NVMM),width=1280,height=720,framerate=30/1' ! \
+fakesink
 ```
 
-Run hand tracking without moving the robot:
+For the repo demo, use the Jetson CSI backend:
 
 ```bash
-python scripts/hand_follow.py --dry-run --camera 0
+python -u scripts/hand_follow.py \
+  --dry-run \
+  --camera 0 \
+  --camera-backend jetson-csi \
+  --pan-range-deg 20 \
+  --elbow-range-deg 25 \
+  --no-preview
 ```
 
-For the Raspberry Pi Camera v2 on Jetson CSI `camera0`, use the Jetson CSI
-backend. This path works even when the Conda OpenCV build does not include
-GStreamer support:
+## Preview From A Mac Over SSH
 
-```bash
-python scripts/hand_follow.py --dry-run --camera 0 --camera-backend jetson-csi --pan-range-deg 20 --elbow-range-deg 25 --no-preview
-```
-
-For SSH/headless sessions, disable the OpenCV preview window:
-
-```bash
-python scripts/hand_follow.py --dry-run --camera 0 --no-preview
-```
-
-To view the annotated camera preview from a Mac over SSH, open the SSH tunnel
-from the Mac:
+From the Mac, open an SSH tunnel to the Jetson:
 
 ```bash
 ssh -L 8080:127.0.0.1:8080 dontech@<jetson-host-or-ip>
 ```
 
-Then, inside that SSH session on the Jetson:
+Inside that SSH session on the Jetson:
 
 ```bash
 conda activate lerobot
 cd ~/lerobot/SO-101_Ladon
-python -u scripts/hand_follow.py --dry-run --camera 0 --camera-backend jetson-csi --pan-range-deg 20 --elbow-range-deg 25 --no-preview --preview-stream-port 8080
+
+python -u scripts/hand_follow.py \
+  --dry-run \
+  --camera 0 \
+  --camera-backend jetson-csi \
+  --pan-range-deg 20 \
+  --elbow-range-deg 25 \
+  --no-preview \
+  --preview-stream-port 8080
 ```
 
-Open this on the Mac:
+Open this URL on the Mac:
 
 ```text
 http://127.0.0.1:8080/stream.mjpg
 ```
 
-Run a conservative robot-connected test:
+## Run Live Teleoperation
+
+Start with a conservative live test:
 
 ```bash
-python scripts/hand_follow.py --camera 0 --camera-backend jetson-csi --pan-range-deg 20 --elbow-range-deg 25 --fps 10 --wave-joint wrist_flex
+python -u scripts/hand_follow.py \
+  --camera 0 \
+  --camera-backend jetson-csi \
+  --pan-range-deg 20 \
+  --elbow-range-deg 25 \
+  --fps 10 \
+  --wave-joint wrist_flex \
+  --no-preview \
+  --preview-stream-port 8080
 ```
 
-When the demo is running:
+Useful tuning flags:
 
-- Move your hand left/right to pan the arm around the measured starting pose.
-- Move your hand up to move `elbow_flex` negative; move it down to move
-  `elbow_flex` positive.
-- Hold an open palm in view to trigger a gentle wave.
-- Press `q`, `Esc`, or `Ctrl+C` to stop. In robot mode, the script returns
-  `shoulder_pan` and `elbow_flex` to the measured starting pose before
-  disconnecting.
+- `--pan-range-deg`: maximum `shoulder_pan` offset from the measured start pose.
+- `--elbow-range-deg`: maximum `elbow_flex` offset from the measured start pose.
+- `--smoothing`: low-pass factor for target changes.
+- `--max-step-deg`: maximum joint target change per control tick.
+- `--no-hand-behavior hold`: hold the last target when no hand is visible.
+- `--no-hand-behavior return`: drift back to the measured start pose when no
+  hand is visible.
 
-Record your own safe movement limits:
+To increase motion, raise ranges gradually:
 
 ```bash
-python scripts/record_safe_limits.py
+--pan-range-deg 30 --elbow-range-deg 35
 ```
 
-This disables torque and records the min/max LeRobot labels while you gently move each physical joint through the range you want scripts to be allowed to use. It saves `config/safe_joint_limits.json`, and future motion scripts clamp targets to those limits.
+If the script reports a target outside recorded safe limits, it is clamping the
+command to protect the arm.
 
-Run the full motion: lift from the measured rested pose, wave gently, then return to that same rested pose before disconnecting:
+## Other Robot Utilities
+
+Read the current robot pose:
 
 ```bash
-python scripts/lift_and_wave.py --shoulder-lift-offset 10 --elbow-flex-offset -45 --wrist-flex-offset -5 --amplitude 2 --lift-seconds 6
+python scripts/read_pose.py
 ```
 
-By default the lift is staged: `elbow_flex` moves first, then `shoulder_lift` and `wrist_flex` follow. This tends to get the forearm up before the shoulder carries it higher.
-
-If the lift direction looks wrong, stop with `Ctrl+C`. The script will attempt to return to the measured bottom pose, but keep one hand near power.
-
-For a taller lift, increase elbow first while keeping shoulder and wrist smaller:
-
-```bash
-python scripts/lift_and_wave.py --shoulder-lift-offset 10 --elbow-flex-offset -60 --wrist-flex-offset -5 --amplitude 2 --lift-seconds 7
-```
-
-If one recorded limit is too tight, re-record only that joint:
-
-```bash
-python scripts/record_one_safe_limit.py --joint elbow_flex
-```
-
-## If A Joint Name Looks Wrong
-
-For a live view while you move the arm by hand:
+Monitor live joint deltas while moving the arm by hand:
 
 ```bash
 python scripts/live_joint_deltas.py
 ```
 
-Current Ladon finding: physical `wrist_roll` and physical `gripper` are swapped in the LeRobot channels. Temporary repo behavior: `ladon_config.py` remaps physical `wrist_roll` to the LeRobot `gripper` channel, and physical `gripper` to the LeRobot `wrist_roll` channel. This lets scripts use the physical labels for now. Fix the motor IDs and recalibrate later, then remove the remap. See `docs/joint_mapping_ladon.md`.
+Run a scripted lift, wave, and return:
 
-## Notes
+```bash
+python scripts/lift_and_wave.py \
+  --shoulder-lift-offset 10 \
+  --elbow-flex-offset -45 \
+  --wrist-flex-offset -5 \
+  --amplitude 2 \
+  --lift-seconds 6
+```
 
-- Arm joints are in degrees because `use_degrees=True`.
-- Because of the temporary wrist/gripper remap, printed units follow the underlying LeRobot channel until the motor IDs are fixed.
-- `max_relative_target=2.0` is enabled in the shared config so LeRobot clips large per-command jumps.
-- If the port or robot id changes, edit `ladon_config.py`.
+Record safe limits for all joints:
+
+```bash
+python scripts/record_safe_limits.py
+```
+
+Re-record one joint:
+
+```bash
+python scripts/record_one_safe_limit.py --joint elbow_flex
+```
+
+## Joint Mapping Note
+
+Ladon's physical `wrist_roll` and physical `gripper` are currently swapped
+relative to the standard SO-101 follower mapping. `ladon_config.py` includes a
+temporary software remap so scripts can use physical joint names consistently.
+
+See `docs/joint_mapping_ladon.md` for the observed mapping and repair path.
+
+## Implementation Notes
+
+- Arm joints are commanded in degrees because `use_degrees=True`.
+- Downloaded MediaPipe model files are ignored with `models/*.task`.
+- LeRobot's internal relative target clamp is disabled in this repo; motion
+  scripts instead use recorded absolute safe limits plus per-step target limits.
+- The Jetson CSI backend captures a supported sensor mode and scales frames to
+  the processing resolution requested by `--width` and `--height`.
