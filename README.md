@@ -1,5 +1,26 @@
 # SO-101 Ladon
 
+## Real-Time Hand Gesture Teleoperation on Jetson Orin Nano
+
+`Ladon Hand Follow` is a computer vision demo for the SO-101 follower arm. A
+camera connected to the Jetson Orin Nano tracks one hand with MediaPipe Hands,
+maps left/right hand position to safe `shoulder_pan` motion, maps up/down hand
+position to safe `elbow_flex` motion, and triggers a gentle wave when an open
+palm is held in view.
+
+Portfolio framing:
+
+> Built a real-time hand-gesture teleoperation system on Jetson Orin Nano using
+> OpenCV, MediaPipe Hands, and LeRobot, with smoothed vision-to-joint control,
+> recorded joint safety limits, and interrupt-safe robot return behavior.
+
+Architecture:
+
+```text
+Jetson camera -> OpenCV frames -> MediaPipe hand landmarks -> gesture/state filter
+    -> smoothed safe joint targets -> LeRobot SO-101 follower arm
+```
+
 Small, editable scripts for safely testing the SO-101 follower arm named `ladon`.
 
 This repo assumes:
@@ -39,6 +60,30 @@ Quick import check:
 python -c "from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig; print('ok')"
 ```
 
+Hand-follow dependency check:
+
+```bash
+python scripts/check_hand_follow_deps.py
+```
+
+The `lerobot` env currently provides OpenCV, NumPy, Torch, and LeRobot. Install
+MediaPipe inside that env before running the hand-follow demo:
+
+```bash
+python -m pip install mediapipe
+```
+
+Download the MediaPipe hand landmarker model:
+
+```bash
+python scripts/download_hand_landmarker.py
+```
+
+If the default MediaPipe wheel is not available for your Jetson Python version
+or architecture, use a Jetson-compatible MediaPipe wheel. As a fallback project
+path, keep the same robot-control script shape and replace MediaPipe landmark
+detection with OpenCV color-marker tracking.
+
 ## Commands
 
 Read all joints:
@@ -46,6 +91,69 @@ Read all joints:
 ```bash
 python scripts/read_pose.py
 ```
+
+Find Jetson cameras:
+
+```bash
+lerobot-find-cameras opencv
+```
+
+Run hand tracking without moving the robot:
+
+```bash
+python scripts/hand_follow.py --dry-run --camera 0
+```
+
+For the Raspberry Pi Camera v2 on Jetson CSI `camera0`, use the Jetson CSI
+backend. This path works even when the Conda OpenCV build does not include
+GStreamer support:
+
+```bash
+python scripts/hand_follow.py --dry-run --camera 0 --camera-backend jetson-csi --pan-range-deg 20 --elbow-range-deg 25 --no-preview
+```
+
+For SSH/headless sessions, disable the OpenCV preview window:
+
+```bash
+python scripts/hand_follow.py --dry-run --camera 0 --no-preview
+```
+
+To view the annotated camera preview from a Mac over SSH, open the SSH tunnel
+from the Mac:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 dontech@<jetson-host-or-ip>
+```
+
+Then, inside that SSH session on the Jetson:
+
+```bash
+conda activate lerobot
+cd ~/lerobot/SO-101_Ladon
+python -u scripts/hand_follow.py --dry-run --camera 0 --camera-backend jetson-csi --pan-range-deg 20 --elbow-range-deg 25 --no-preview --preview-stream-port 8080
+```
+
+Open this on the Mac:
+
+```text
+http://127.0.0.1:8080/stream.mjpg
+```
+
+Run a conservative robot-connected test:
+
+```bash
+python scripts/hand_follow.py --camera 0 --camera-backend jetson-csi --pan-range-deg 20 --elbow-range-deg 25 --fps 10 --wave-joint wrist_flex
+```
+
+When the demo is running:
+
+- Move your hand left/right to pan the arm around the measured starting pose.
+- Move your hand up to move `elbow_flex` negative; move it down to move
+  `elbow_flex` positive.
+- Hold an open palm in view to trigger a gentle wave.
+- Press `q`, `Esc`, or `Ctrl+C` to stop. In robot mode, the script returns
+  `shoulder_pan` and `elbow_flex` to the measured starting pose before
+  disconnecting.
 
 Record your own safe movement limits:
 
