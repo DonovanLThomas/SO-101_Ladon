@@ -1,0 +1,56 @@
+{
+  "robot_id": "ladon",
+  "source": "scripts/record_safe_limits.py",
+  "joint_channel_map": {
+    "shoulder_pan": "shoulder_pan",
+    "shoulder_lift": "shoulder_lift",
+    "elbow_flex": "elbow_flex",
+    "wrist_flex": "wrist_flex",
+    "wrist_roll": "gripper",
+    "gripper": "wrist_roll"
+  },
+  "limits": {
+    "shoulder_pan": {
+      "min": -118.3076923076923,
+      "max": 115.93406593406593,
+      "measured_min": -120.3076923076923,
+      "measured_max": 117.93406593406593,
+      "margin": 2.0
+    },
+    "shoulder_lift": {
+      "min": -102.17582417582418,
+      "max": -18.439560439560438,
+      "measured_min": -104.17582417582418,
+      "measured_max": -16.439560439560438,
+      "margin": 2.0
+    },
+    "elbow_flex": {
+      "min": -101.6043956043956,
+      "max": 100.37362637362638,
+      "measured_min": -103.6043956043956,
+      "measured_max": 102.37362637362638,
+      "margin": 2.0
+    },
+    "wrist_flex": {
+      "min": -103.4065934065934,
+      "max": 80.9010989010989,
+      "measured_min": -105.4065934065934,
+      "measured_max": 82.9010989010989,
+      "margin": 2.0
+    },
+    "wrist_roll": {
+      "min": 2.0,
+      "max": 97.97369113391213,
+      "measured_min": 0.0,
+      "measured_max": 99.97369113391213,
+      "margin": 2.0
+    },
+    "gripper": {
+      "min": -4.285714285714286,
+      "max": 113.56043956043956,
+      "measured_min": -6.285714285714286,
+      "measured_max": 115.56043956043956,
+      "margin": 2.0
+    }
+  }
+}

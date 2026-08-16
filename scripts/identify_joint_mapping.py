@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ladon_config import JOINTS, make_ladon, pose_from_observation, print_pose
+from ladon_config import JOINTS, JOINT_CHANNELS, make_ladon, pose_from_observation, print_pose
 
 
 PHYSICAL_JOINTS = [
@@ -35,7 +35,7 @@ def print_biggest_changes(before: dict[str, float], after: dict[str, float], top
         reverse=True,
     )
     for joint, delta, start, end in deltas[:top]:
-        units = "pct" if joint == "gripper" else "deg"
+        units = "pct" if JOINT_CHANNELS[joint] == "gripper" else "deg"
         print(f"  {joint:16s} delta={delta:8.2f} {units}   {start:8.2f} -> {end:8.2f}")
 
 

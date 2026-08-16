@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ladon_config import JOINTS, make_ladon, pose_from_observation
+from ladon_config import JOINTS, JOINT_CHANNELS, make_ladon, pose_from_observation
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,7 +33,7 @@ def print_table(baseline: dict[str, float], pose: dict[str, float], threshold: f
     print(f"{'label':16s} {'current':>10s} {'delta':>10s} {'units':>6s}  status")
     print("-" * 58)
     for joint in JOINTS:
-        units = "pct" if joint == "gripper" else "deg"
+        units = "pct" if JOINT_CHANNELS[joint] == "gripper" else "deg"
         delta = deltas[joint]
         marker = "<-- biggest" if joint == biggest and abs(delta) >= threshold else ""
         moving = "*" if abs(delta) >= threshold else " "

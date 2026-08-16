@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Mapping
+from functools import lru_cache
+from pathlib import Path
 
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from lerobot.utils.robot_utils import precise_sleep
 
 ROBOT_PORT = "/dev/ttyACM0"
 ROBOT_ID = "ladon"
+REPO_ROOT = Path(__file__).resolve().parent
+SAFE_LIMITS_PATH = REPO_ROOT / "config" / "safe_joint_limits.json"
 
 ARM_JOINTS = [
     "shoulder_pan",
@@ -22,6 +27,18 @@ GRIPPER = "gripper"
 JOINTS = [*ARM_JOINTS, GRIPPER]
 
 POSITION_KEY_SUFFIX = ".pos"
+
+# Temporary software remap for Ladon's current motor IDs.
+# Physical wrist_roll is currently on the LeRobot gripper channel, and
+# physical gripper is currently on the LeRobot wrist_roll channel.
+JOINT_CHANNELS = {
+    "shoulder_pan": "shoulder_pan",
+    "shoulder_lift": "shoulder_lift",
+    "elbow_flex": "elbow_flex",
+    "wrist_flex": "wrist_flex",
+    "wrist_roll": "gripper",
+    "gripper": "wrist_roll",
+}
 
 # LeRobot's SO follower uses degrees for arm joints when use_degrees=True.
 # The gripper is normalized separately to 0..100.
@@ -40,13 +57,7 @@ MAX_SHOULDER_ASSIST_DEG = 2.0
 MAX_LIFT_OFFSET_DEG = 25.0
 MAX_ELBOW_LIFT_OFFSET_DEG = 45.0
 
-# Current hardware diagnostic result:
-# physical wrist_roll reports through the LeRobot "gripper" channel, and
-# physical gripper reports through the LeRobot "wrist_roll" channel.
-# Block wrist_roll commands until motor IDs 5 and 6 are corrected and the arm is recalibrated.
-BLOCKED_MOTION_JOINTS = {
-    "wrist_roll": "Detected mapping swap: wrist_roll commands move the physical gripper on this arm.",
-}
+BLOCKED_MOTION_JOINTS = {}
 
 
 def make_ladon() -> SO101Follower:
@@ -61,21 +72,53 @@ def make_ladon() -> SO101Follower:
 
 
 def action_key(joint: str) -> str:
-    return f"{joint}{POSITION_KEY_SUFFIX}"
+    return f"{JOINT_CHANNELS[joint]}{POSITION_KEY_SUFFIX}"
 
 
 def pose_from_observation(observation: Mapping[str, float]) -> dict[str, float]:
     return {joint: float(observation[action_key(joint)]) for joint in JOINTS}
 
 
+@lru_cache(maxsize=1)
+def load_safe_limits() -> dict[str, dict[str, float]]:
+    if not SAFE_LIMITS_PATH.exists():
+        return {}
+    data = json.loads(SAFE_LIMITS_PATH.read_text())
+    return {
+        joint: {"min": float(values["min"]), "max": float(values["max"])}
+        for joint, values in data.get("limits", {}).items()
+    }
+
+
+def clamp_to_safe_limits(pose: Mapping[str, float], joints: list[str]) -> dict[str, float]:
+    limits = load_safe_limits()
+    clamped: dict[str, float] = {}
+    for joint in joints:
+        value = float(pose[joint])
+        joint_limits = limits.get(joint)
+        if not joint_limits:
+            clamped[joint] = value
+            continue
+
+        safe_value = min(max(value, joint_limits["min"]), joint_limits["max"])
+        if abs(safe_value - value) > 1e-6:
+            print(
+                f"{joint} target {value:.2f} is outside recorded safe limits "
+                f"[{joint_limits['min']:.2f}, {joint_limits['max']:.2f}]; using {safe_value:.2f}."
+            )
+        clamped[joint] = safe_value
+    return clamped
+
+
 def action_from_pose(pose: Mapping[str, float], joints: list[str] | None = None) -> dict[str, float]:
     selected = JOINTS if joints is None else joints
-    return {action_key(joint): float(pose[joint]) for joint in selected}
+    safe_pose = clamp_to_safe_limits(pose, selected)
+    return {action_key(joint): safe_pose[joint] for joint in selected}
 
 
 def print_pose(pose: Mapping[str, float]) -> None:
     for joint in JOINTS:
-        units = "pct" if joint == GRIPPER else "deg"
+        units = "pct" if JOINT_CHANNELS[joint] == GRIPPER else "deg"
         print(f"{joint:16s} {pose[joint]:8.2f} {units}")
 
 

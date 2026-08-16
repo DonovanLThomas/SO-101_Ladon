@@ -18,13 +18,16 @@ The standard local LeRobot `SO101Follower` mapping is:
 - `wrist_roll` -> motor ID 5
 - `gripper` -> motor ID 6
 
-Ladon's current behavior indicates those two physical motors are reversed. Do not run wrist-roll wave motions until IDs 5 and 6 are corrected and the arm is recalibrated.
+Ladon's current behavior indicates those two physical motors are reversed. For now, this repo uses a temporary software remap in `ladon_config.py`:
 
-Safe temporary motion tests:
+- physical `wrist_roll` -> LeRobot `gripper` channel
+- physical `gripper` -> LeRobot `wrist_roll` channel
+
+Safe temporary motion tests after the software remap:
 
 ```bash
-python scripts/nudge_joint.py --joint wrist_flex --delta 2.0 --seconds 2 --return-home
-python scripts/tiny_wave.py --joint wrist_flex --cycles 2 --amplitude 3.0
+python scripts/nudge_joint.py --joint wrist_roll --delta 2.0 --seconds 2 --return-home
+python scripts/tiny_wave.py --joint wrist_roll --cycles 2 --amplitude 3.0
 ```
 
 Likely repair path:
@@ -32,4 +35,4 @@ Likely repair path:
 1. Use LeRobot's motor setup process to assign the physical wrist-roll motor to ID 5 and physical gripper motor to ID 6.
 2. Recalibrate `ladon`.
 3. Rerun `python scripts/identify_joint_mapping.py`.
-4. Remove the `wrist_roll` entry from `BLOCKED_MOTION_JOINTS` in `ladon_config.py` only after the mapping is correct.
+4. Set `JOINT_CHANNELS` back to identity in `ladon_config.py` only after the mapping is correct.

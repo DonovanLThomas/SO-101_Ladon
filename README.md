@@ -53,6 +53,14 @@ Hold the current measured pose for 3 seconds:
 python scripts/hold_pose.py --seconds 3
 ```
 
+Record your own safe movement limits:
+
+```bash
+python scripts/record_safe_limits.py
+```
+
+This disables torque and records the min/max LeRobot labels while you gently move each physical joint through the range you want scripts to be allowed to use. It saves `config/safe_joint_limits.json`, and future motion scripts clamp targets to those limits.
+
 Nudge one joint by a tiny relative amount and return:
 
 ```bash
@@ -109,11 +117,11 @@ For a live view while you move the arm by hand:
 python scripts/live_joint_deltas.py
 ```
 
-Current Ladon finding: physical `wrist_roll` and physical `gripper` are swapped in the LeRobot channels. The motion scripts currently refuse `wrist_roll` commands until motor IDs 5 and 6 are corrected and the arm is recalibrated. See `docs/joint_mapping_ladon.md`.
+Current Ladon finding: physical `wrist_roll` and physical `gripper` are swapped in the LeRobot channels. Temporary repo behavior: `ladon_config.py` remaps physical `wrist_roll` to the LeRobot `gripper` channel, and physical `gripper` to the LeRobot `wrist_roll` channel. This lets scripts use the physical labels for now. Fix the motor IDs and recalibrate later, then remove the remap. See `docs/joint_mapping_ladon.md`.
 
 ## Notes
 
 - Arm joints are in degrees because `use_degrees=True`.
-- The gripper is normalized to `0..100` and is left unchanged by the first scripts.
+- Because of the temporary wrist/gripper remap, printed units follow the underlying LeRobot channel until the motor IDs are fixed.
 - `max_relative_target=2.0` is enabled in the shared config so LeRobot clips large per-command jumps.
 - If the port or robot id changes, edit `ladon_config.py`.
