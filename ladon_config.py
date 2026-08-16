@@ -42,7 +42,12 @@ JOINT_CHANNELS = {
 
 # LeRobot's SO follower uses degrees for arm joints when use_degrees=True.
 # The gripper is normalized separately to 0..100.
-MAX_RELATIVE_TARGET = 2.0
+#
+# Keep LeRobot's internal relative clamp disabled for these scripts. It compares each target
+# against the measured present position, so gravity/load lag can make it repeatedly clamp
+# a slow scripted slew. We enforce absolute safe limits and per-step targets below instead.
+MAX_RELATIVE_TARGET = None
+MAX_SCRIPT_STEP = 1.0
 DEFAULT_FPS = 15.0
 DEFAULT_NUDGE_SECONDS = 2.0
 DEFAULT_HOLD_SECONDS = 3.0
@@ -151,7 +156,10 @@ def slew_to_pose(
     fps: float = DEFAULT_FPS,
 ) -> None:
     """Linearly move selected joints from start_pose to target_pose."""
-    steps = max(1, int(seconds * fps))
+    max_delta = max(abs(float(target_pose[joint]) - float(start_pose[joint])) for joint in joints)
+    time_steps = max(1, int(seconds * fps))
+    safety_steps = max(1, int(max_delta / MAX_SCRIPT_STEP))
+    steps = max(time_steps, safety_steps)
     for step in range(1, steps + 1):
         loop_start = time.perf_counter()
         alpha = step / steps

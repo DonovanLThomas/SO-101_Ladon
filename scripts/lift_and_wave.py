@@ -88,9 +88,10 @@ def build_lift_pose(bottom_pose: dict[str, float], args: argparse.Namespace) -> 
 
 def hold_pose(robot, pose: dict[str, float], seconds: float, fps: float) -> None:
     end_time = time.perf_counter() + max(seconds, 0.0)
+    hold_joints = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex"]
     while time.perf_counter() < end_time:
         loop_start = time.perf_counter()
-        robot.send_action(action_from_pose(pose))
+        robot.send_action(action_from_pose(pose, hold_joints))
         sleep_step(loop_start, fps)
 
 

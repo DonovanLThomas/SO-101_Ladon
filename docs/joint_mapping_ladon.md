@@ -1,6 +1,6 @@
 # Ladon Joint Mapping Notes
 
-Result from `python scripts/identify_joint_mapping.py`:
+Observed manual mapping:
 
 | Physical joint moved | LeRobot name that changed most |
 | --- | --- |
@@ -23,16 +23,11 @@ Ladon's current behavior indicates those two physical motors are reversed. For n
 - physical `wrist_roll` -> LeRobot `gripper` channel
 - physical `gripper` -> LeRobot `wrist_roll` channel
 
-Safe temporary motion tests after the software remap:
-
-```bash
-python scripts/nudge_joint.py --joint wrist_roll --delta 2.0 --seconds 2 --return-home
-python scripts/tiny_wave.py --joint wrist_roll --cycles 2 --amplitude 3.0
-```
+Use `python scripts/live_joint_deltas.py` to inspect the current mapping live.
 
 Likely repair path:
 
 1. Use LeRobot's motor setup process to assign the physical wrist-roll motor to ID 5 and physical gripper motor to ID 6.
 2. Recalibrate `ladon`.
-3. Rerun `python scripts/identify_joint_mapping.py`.
+3. Rerun `python scripts/live_joint_deltas.py`.
 4. Set `JOINT_CHANNELS` back to identity in `ladon_config.py` only after the mapping is correct.
