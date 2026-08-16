@@ -22,6 +22,7 @@ from ladon_config import (
     MAX_LIFT_OFFSET_DEG,
     MAX_SHOULDER_ASSIST_DEG,
     MAX_WAVE_AMPLITUDE_DEG,
+    MAX_WRIST_PRESENT_OFFSET_DEG,
     action_from_pose,
     clamp_abs,
     make_ladon,
@@ -35,6 +36,7 @@ from ladon_config import (
 
 LIFT_JOINTS = ["shoulder_lift", "elbow_flex", "wrist_flex"]
 RETURN_JOINTS = ["shoulder_lift", "elbow_flex", "wrist_flex", "shoulder_pan"]
+GREETING_JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,6 +116,50 @@ def wave_from_pose(robot, lifted_pose: dict[str, float], args: argparse.Namespac
             pose["shoulder_pan"] = lifted_pose["shoulder_pan"] + shoulder_assist * math.sin(phase)
         robot.send_action(action_from_pose(pose, list(pose)))
         sleep_step(loop_start, args.fps)
+
+
+def open_palm_greeting_from_pose(robot, base_pose: dict[str, float], args: argparse.Namespace) -> None:
+    require_motion_joint_allowed("shoulder_lift")
+    require_motion_joint_allowed("wrist_flex")
+
+    greeting_pose = dict(base_pose)
+    greeting_pose["shoulder_lift"] = base_pose["shoulder_lift"] + clamp_abs(
+        args.greeting_lift_deg,
+        MAX_LIFT_OFFSET_DEG,
+        "greeting-lift-deg",
+    )
+    greeting_pose["wrist_flex"] = base_pose["wrist_flex"] + clamp_abs(
+        args.greeting_wrist_offset_deg,
+        MAX_WRIST_PRESENT_OFFSET_DEG,
+        "greeting-wrist-offset-deg",
+    )
+
+    lift_seconds = max(args.greeting_settle_seconds, 0.2)
+    print(f"\nOpen-palm greeting: presenting over {lift_seconds:.1f}s.")
+    slew_to_pose(
+        robot,
+        base_pose,
+        greeting_pose,
+        joints=GREETING_JOINTS,
+        seconds=lift_seconds,
+        fps=args.fps,
+    )
+    wave_from_pose(robot, greeting_pose, args)
+
+    settle_pose = dict(greeting_pose)
+    settle_pose["shoulder_lift"] = base_pose["shoulder_lift"]
+    settle_pose["wrist_flex"] = base_pose["wrist_flex"]
+
+    settle_seconds = max(args.greeting_settle_seconds, 0.2)
+    print(f"Settling greeting over {settle_seconds:.1f}s.")
+    slew_to_pose(
+        robot,
+        greeting_pose,
+        settle_pose,
+        joints=GREETING_JOINTS,
+        seconds=settle_seconds,
+        fps=args.fps,
+    )
 
 
 def lift_to_pose(
