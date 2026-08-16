@@ -16,7 +16,7 @@ motion:
 - Hand left/right controls `shoulder_pan`.
 - Hand up moves `elbow_flex` in the negative direction.
 - Hand down moves `elbow_flex` in the positive direction.
-- Holding an open palm triggers a gentle wave.
+- Holding an open palm triggers a friendly lift-and-wave greeting.
 - The script smooths targets, limits per-frame motion, clamps to recorded safe
   joint limits, and returns controlled joints to the measured start pose on
   shutdown.
@@ -199,6 +199,13 @@ Useful tuning flags:
 - `--elbow-range-deg`: maximum `elbow_flex` offset from the measured start pose.
 - `--smoothing`: low-pass factor for target changes.
 - `--max-step-deg`: maximum joint target change per control tick.
+- `--wave-amplitude`: wrist wave size during the greeting. Hand-follow defaults
+  to 6 degrees and clamps at 8 degrees.
+- `--greeting-lift-deg`: shoulder lift offset before the open-palm wave.
+- `--greeting-wrist-offset-deg`: wrist presentation offset before the
+  open-palm wave. It now has its own 45 degree clamp so larger wrist
+  presentation values are not limited by the shoulder lift clamp.
+- `--greeting-settle-seconds`: time to ease into and out of the greeting pose.
 - `--no-hand-behavior hold`: hold the last target when no hand is visible.
 - `--no-hand-behavior return`: drift back to the measured start pose when no
   hand is visible.
